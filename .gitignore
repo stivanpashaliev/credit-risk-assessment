@@ -1,0 +1,19 @@
+# Data - never commit datasets
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Models (optional - uncomment if model files are large)
+# models/
+
+# IDE
+.idea/
+.vscode/
