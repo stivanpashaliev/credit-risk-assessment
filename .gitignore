@@ -17,3 +17,8 @@ venv/
 # IDE
 .idea/
 .vscode/
+
+notebooks/models/*.joblib
+notebooks/models/cv_summary.csv
+notebooks/models/decision_policy.json
+notebooks/data/
