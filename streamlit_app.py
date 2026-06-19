@@ -596,67 +596,55 @@ def score_band_chart(y_true, calibrated) -> alt.Chart:
     return _theme(chart)
 
 
-def business_matrix_chart(y_true, calibrated, threshold: float) -> alt.Chart:
-    y_pred_decline = calibrated >= threshold
+def business_matrix_chart(
+    y_true, calibrated, threshold: float, decline_threshold: float
+) -> alt.Chart:
+    decision = np.where(
+        calibrated < threshold, "Approve",
+        np.where(calibrated < decline_threshold, "Manual Review", "Decline"),
+    )
 
-    tn, fp, fn, tp = confusion_matrix(
-        y_true,
-        y_pred_decline.astype(int),
-    ).ravel()
+    rows = []
+    for dec in ["Approve", "Manual Review", "Decline"]:
+        mask_dec = decision == dec
+        for actual_val, actual_label in [(0, "Repaid"), (1, "Defaulted")]:
+            mask_act = y_true == actual_val
+            n = int((mask_dec & mask_act).sum())
 
-    df = pd.DataFrame([
-        {
-            "Actual": "Repaid",
-            "Decision": "Approve",
-            "Applicants": tn,
-            "Meaning": "Correct approval",
-            "Type": "Good",
-        },
-        {
-            "Actual": "Repaid",
-            "Decision": "Decline",
-            "Applicants": fp,
-            "Meaning": "Lost good customer",
-            "Type": "Costly",
-        },
-        {
-            "Actual": "Defaulted",
-            "Decision": "Approve",
-            "Applicants": fn,
-            "Meaning": "Approved defaulter",
-            "Type": "Costly",
-        },
-        {
-            "Actual": "Defaulted",
-            "Decision": "Decline",
-            "Applicants": tp,
-            "Meaning": "Correct decline",
-            "Type": "Good",
-        },
-    ])
+            if dec == "Approve" and actual_label == "Repaid":
+                meaning, kind = "Correct approval", "Good"
+            elif dec == "Approve" and actual_label == "Defaulted":
+                meaning, kind = "Approved defaulter", "Costly"
+            elif dec == "Manual Review":
+                meaning, kind = "Sent for review", "Neutral"
+            elif dec == "Decline" and actual_label == "Repaid":
+                meaning, kind = "Lost good customer", "Costly"
+            else:
+                meaning, kind = "Correct decline", "Good"
+
+            rows.append({
+                "Actual": actual_label,
+                "Decision": dec,
+                "Applicants": n,
+                "Meaning": meaning,
+                "Type": kind,
+            })
+
+    df = pd.DataFrame(rows)
 
     base = alt.Chart(df).encode(
-        x=alt.X(
-            "Decision:N",
-            title=None,
-            sort=["Approve", "Decline"],
-        ),
-        y=alt.Y(
-            "Actual:N",
-            title=None,
-            sort=["Repaid", "Defaulted"],
-        ),
+        x=alt.X("Decision:N", title=None,
+                sort=["Approve", "Manual Review", "Decline"]),
+        y=alt.Y("Actual:N", title=None,
+                sort=["Repaid", "Defaulted"]),
     )
 
     cells = base.mark_rect(cornerRadius=6).encode(
-        color=alt.Color(
-            "Type:N",
-            legend=None,
+        color=alt.Color("Type:N", legend=None,
             scale=alt.Scale(
-                domain=["Good", "Costly"],
-                range=["#DBEAFE", "#FEE2E2"],
-            ),
-        ),
+                domain=["Good", "Neutral", "Costly"],
+                range=["#DBEAFE", "#FEF9C3", "#FEE2E2"],
+            )),
         tooltip=[
             alt.Tooltip("Actual:N"),
             alt.Tooltip("Decision:N"),
@@ -666,23 +654,14 @@ def business_matrix_chart(y_true, calibrated, threshold: float) -> alt.Chart:
     )
 
     numbers = base.mark_text(
-        fontSize=22,
-        fontWeight="bold",
-        color=INK,
-        dy=-8,
-    ).encode(
-        text=alt.Text("Applicants:Q", format=",")
-    )
+        fontSize=22, fontWeight="bold", color=INK, dy=-8,
+    ).encode(text=alt.Text("Applicants:Q", format=","))
 
     labels = base.mark_text(
-        fontSize=11,
-        color=MUTED,
-        dy=16,
-    ).encode(
-        text="Meaning:N"
-    )
+        fontSize=11, color=MUTED, dy=16,
+    ).encode(text="Meaning:N")
 
-    return _theme((cells + numbers + labels).properties(height=280))
+    return _theme((cells + numbers + labels).properties(height=220))
 
 
 def cutoff_tradeoff_chart(
@@ -743,8 +722,8 @@ def cutoff_tradeoff_chart(
             ),
             y=alt.Y(
                 "Value:Q",
-                title="Rate / normalized cost",
-                axis=alt.Axis(format="%"),
+                title="%",
+                axis=alt.Axis(format=".0%", tickCount=6),
             ),
             color=alt.Color("Metric:N", title=None),
             tooltip=[
@@ -1343,10 +1322,12 @@ def view_portfolio(policy) -> None:
                 y_true=y_true,
                 calibrated=calibrated,
                 threshold=approval_threshold,
+                decline_threshold=policy.decline_threshold,
             )
         )
         st.caption(
-            "The two costly outcomes are approved defaulters and rejected good customers."
+            "Approve · Manual Review · Decline — the three costly outcomes are "
+            "approved defaulters and rejected good customers."
         )
 
     st.write("")
