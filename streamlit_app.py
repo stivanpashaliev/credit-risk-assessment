@@ -23,13 +23,13 @@ Run from the project root:
 """
 
 from pathlib import Path
-
+pip
 import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
 from sklearn.calibration import calibration_curve
-from sklearn.metrics import confusion_matrix, roc_curve
+from sklearn.metrics import roc_curve
 
 from src.utils import (
     FEATURE_LABELS,
