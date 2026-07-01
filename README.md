@@ -38,6 +38,7 @@
 - [The Web App](#️-the-web-app)
 - [The Notebooks](#-the-notebooks)
 - [Design Decisions & Trade-offs](#-design-decisions--trade-offs)
+- [Limitations & Future Work](#-limitations--future-work)
 - [References](#-references)
 - [Author](#-author)
 
@@ -282,6 +283,32 @@ Selecting Platt vs. isotonic on the test set would let the test set influence mo
 <summary><b>Why is the recommendation system "faithful"?</b></summary>
 
 Serving code that silently diverges from training preprocessing is a classic production bug. Notebook 05 reconstructs the transform and asserts it reproduces the frozen `X_test.csv` exactly — turning a quiet bug into a loud test failure.
+</details>
+
+---
+
+## 🔭 Limitations & Future Work
+
+> This project intentionally scopes to model *development*, not model *operations*. The gap below is a deliberate, documented boundary — not an oversight.
+
+**Known limitations**
+
+- **Batch-trained on a historical snapshot.** The model is fit once on the "Give Me Some Credit" cohort (2009–2011 vintage) and deployed as-is. Nothing in this repo detects when today's applicants stop resembling that training population.
+- **No drift monitoring.** Neither `src/utils.py` nor the apps track whether the distribution of incoming applicants (`RevolvingUtilization`, `DebtRatio`, income, etc.) or the realized default rate diverges from the training baseline.
+- **No retraining cadence.** A structural break in the applicant→default relationship (a recession, a policy shift, a change in underwriting mix) would silently degrade decision quality with no alert.
+- **Applicant-level features only.** The model conditions purely on individual financial attributes, not on macroeconomic context (unemployment rate, interest rates, fiscal interventions). Two applicants with identical profiles can carry very different real-world risk depending on the economic regime — a gap the model cannot see.
+
+**Planned / future work**
+
+- Population Stability Index (PSI) and Kolmogorov–Smirnov tests comparing production applicant distributions against the frozen training baseline, with defined alert thresholds.
+- Realized-vs-predicted default rate tracking over time, to catch **concept drift** (the applicant→default relationship changing) — not just covariate shift, which PSI alone would miss.
+- A defined retraining cadence (e.g. quarterly) or drift-triggered retraining, with each model version tied to the data window it was calibrated on.
+- Investigate macroeconomic features as model inputs — while treating this as risk-reduction, not a fix: even a macro-aware model assumes the *learned relationship* between conditions and default stays fixed, which is exactly what breaks in a structural shift.
+
+<details>
+<summary><b>Why not just add macro features and call it solved?</b></summary>
+
+Adding features like unemployment rate narrows covariate shift, but it does not address **concept drift** — the case where the same input (including the macro features) maps to a different default probability than before. During COVID-19, high unemployment did *not* translate into proportionally higher defaults because of stimulus payments and mortgage moratoriums: the function relating inputs to outcomes changed, not just the inputs themselves. No feature set chosen in advance can fully anticipate a structural break like that — which is exactly why monitoring and a retraining trigger, not just richer features, are the real mitigation.
 </details>
 
 ---
